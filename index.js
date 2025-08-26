@@ -81,22 +81,22 @@ async function sendSms({ to, text }) {
   return telnyx.messages.create({ from, to, text });
 }
 
-// --- Telnyx inbound webhook ---
+// --- Telnyx inbound webhook (fast-ack version) ---
 app.post('/webhook', async (req, res) => {
+  // 1) Always acknowledge immediately
+  res.status(200).json({ ok: true });
+
   try {
     if (!verifyTelnyxSignature(req)) {
       logger.warn({ msg: 'Signature verification failed' });
-      return res.status(400).send('Invalid signature');
+      return; // we've already ack'd; just stop processing
     }
 
     const body = req.body || {};
     const eventType = body?.data?.event_type || body?.event_type || 'unknown';
     const payload = body?.data?.payload || body?.data?.record || body?.payload || body;
 
-    // Only handle inbound messages
-    if (!eventType.includes('message.received')) {
-      return res.status(200).json({ ignored: true });
-    }
+    if (!eventType.includes('message.received')) return;
 
     const inboundText = payload?.text || payload?.message || '';
     const from = payload?.from?.phone_number || payload?.from || '';
@@ -111,32 +111,23 @@ app.post('/webhook', async (req, res) => {
     if (/\b(stop|unsubscribe)\b/i.test(inboundText)) {
       await sendSms({ to: from, text: 'Understood—you will not receive further texts. Reply HELP for help.' });
       session.stage = 'stopped';
-      return res.status(200).json({ ok: true });
+      return;
     }
 
-    // Generate reply
-    const reply = await generateBotReply({ from, text: inboundText });
-
-    // (Optional) Quiet hours: only reply 08:00–20:00 server time
+    // (Optional) Quiet hours
     if (process.env.ENABLE_QUIET_HOURS === 'true') {
       const hour = new Date().getHours();
-      if (hour < 8 || hour >= 20) {
-        logger.info({ from }, 'Quiet hours — not replying');
-        return res.status(200).json({ ok: true });
-      }
+      if (hour < 8 || hour >= 20) return;
     }
 
-    // Send SMS via Telnyx
+    // 2) Do the heavy work AFTER ack
+    const reply = await generateBotReply({ from, text: inboundText });
     await sendSms({ to: from, text: reply });
 
     session.history.push({ role: 'assistant', text: reply, at: Date.now() });
     session.stage = 'active';
-
-    return res.status(200).json({ ok: true });
   } catch (err) {
-    logger.error({ err }, 'Webhook handler error');
-    // Still return 200 so Telnyx doesn't hammer retries during MVP
-    return res.status(200).json({ ok: true });
+    logger.error({ err }, 'Webhook async processing error');
   }
 });
 
