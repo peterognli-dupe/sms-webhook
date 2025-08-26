@@ -1,16 +1,11 @@
-// index.js
-{ role: 'system', content: systemPrompt },
-{ role: 'user', content: userMsg }
-]
-});
-
-
-return completion.choices?.[0]?.message?.content?.trim() || "Thanks for your message! When is a good time for a quick call?";
+// index.js — Telnyx v2 + OpenAI, Render-ready
+'Thanks for your message! When is a good time for a quick call?'
+);
 }
 
 
 async function sendSms({ to, text }) {
-const from = process.env.TELNYX_FROM_NUMBER; // E.164, e.g., +18885551234 (toll-free) or +1435...
+const from = process.env.TELNYX_FROM_NUMBER; // E.164, e.g., +18885551234
 if (!from) throw new Error('Missing TELNYX_FROM_NUMBER');
 return telnyx.messages.create({ from, to, text });
 }
@@ -44,21 +39,30 @@ const to = payload?.to?.phone_number || payload?.to || '';
 logger.info({ eventType, from, to, inboundText }, 'Inbound message');
 
 
-// Update session state
 const session = getSession(from);
 session.history.push({ role: 'user', text: inboundText, at: Date.now() });
 
 
 // Respect opt-out
-if (/\b(stop|unsubscribe)\b/i.test(inboundText)) {
+if (/(stop|unsubscribe)/i.test(inboundText)) {
 await sendSms({ to: from, text: 'Understood—you will not receive further texts. Reply HELP for help.' });
 session.stage = 'stopped';
 return res.status(200).json({ ok: true });
 }
 
 
-// Get an assistant reply
+// Generate reply
 const reply = await generateBotReply({ from, text: inboundText });
+
+
+// Quiet hours example (optional): only reply 08:00–20:00 local server time
+if (process.env.ENABLE_QUIET_HOURS === 'true') {
+const hour = new Date().getHours();
+if (hour < 8 || hour >= 20) {
+logger.info({ from }, 'Quiet hours — not replying');
+return res.status(200).json({ ok: true });
+}
+}
 
 
 // Send SMS via Telnyx
@@ -72,7 +76,8 @@ session.stage = 'active';
 return res.status(200).json({ ok: true });
 } catch (err) {
 logger.error({ err }, 'Webhook handler error');
-return res.status(200).json({ ok: true }); // Respond 200 so Telnyx doesn’t retry endlessly during MVP
+// Still return 200 so Telnyx doesn't hammer retries during MVP
+return res.status(200).json({ ok: true });
 }
 });
 
