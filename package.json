@@ -15,7 +15,7 @@
 "express-rate-limit": "^7.4.0",
 "openai": "^4.52.0",
 "pino": "^9.3.2",
-"telnyx": "^3.15.0",
+"telnyx": "^2.1.0",
 "body-parser": "^1.20.2"
 },
 "devDependencies": {
