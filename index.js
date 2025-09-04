@@ -143,7 +143,14 @@ app.post('/send', sendLimiter, async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+// Health check endpoint for Fly.io
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
+// Use PORT from env, default 8080
+const PORT = process.env.PORT || 8080;
+
+app.listen(PORT, '0.0.0.0', () => {
   logger.info(`Server listening on port ${PORT}`);
 });
