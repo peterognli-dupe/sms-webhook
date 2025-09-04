@@ -1,17 +1,19 @@
-flyctl deploy --build-only --push -a sms-webhook --image-label deployment-927b0f4b88b7b263d19c3c83e41aa9f3 --config fly.toml
+# ---- Dockerfile (Node.js) ----
+FROM node:20-alpine
 
-==> Verifying app config
+WORKDIR /app
 
-Validating fly.toml
+# Install deps
+COPY package*.json ./
+RUN npm ci --omit=dev || npm install --omit=dev
 
-✓ Configuration is valid
+# Copy app code
+COPY . .
 
---> Verified app config
+# Prod env + port Fly will hit
+ENV NODE_ENV=production
+ENV PORT=8080
+EXPOSE 8080
 
-==> Building image
-
-==> Building image
-
-Error: failed to fetch an image or build from source: app does not have a Dockerfile or buildpacks configured. See https://fly.io/docs/reference/configuration/#the-build-section
-
-unsuccessful command 'flyctl deploy --build-only --push -a sms-webhook --image-label deployment-927b0f4b88b7b263d19c3c83e41aa9f3 --config fly.toml'
+# Start (uses "start": "node index.js" from your package.json)
+CMD ["npm", "start"]
