@@ -17,6 +17,16 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const app = express();
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
+console.log("DEBUG OPENAI present?", !!process.env.OPENAI_API_KEY);
+console.log("DEBUG TELNYX present?", !!process.env.TELNYX_API_KEY);
+
+if (!process.env.OPENAI_API_KEY?.trim()) {
+  console.error("OPENAI_API_KEY missing at runtime");
+  process.exit(1);
+}
+
+
+
 // --- Middleware ---
 app.use(cors());
 // Keep raw body for optional signature verification
